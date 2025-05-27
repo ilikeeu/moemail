@@ -10,6 +10,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { hashPassword, comparePassword } from "@/lib/utils"
 import { authSchema } from "@/lib/validation"
 import { generateAvatarUrl } from "./avatar"
+import { Account } from "next-auth" // 导入 Account 类型
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.EMPEROR]: "皇帝（网站所有者）",
@@ -90,12 +91,12 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
-      // ✨ 修改 GitHub 授权登录地址
       authorization: "https://tuttofattoincasa.eu.org/oauth/authorize",
       token: "https://tuttofattoincasa.eu.org/oauth/token",
       userinfo: {
         url: "https://tuttofattoincasa.eu.org/api/user",
-        async request({ tokens, client }) {
+        // ✨ 为 tokens 参数明确指定类型为 Account
+        async request({ tokens }: { tokens: Account; client: any }) { // client 也可能需要更具体的类型，这里暂时用 any
           // 这里是获取用户信息的请求
           const profile = await client.userinfo(tokens.access_token);
           // ✨ 转换用户信息的格式以匹配 NextAuth.js 的 User 接口
