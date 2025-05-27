@@ -91,21 +91,34 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
-      authorization: "https://tuttofattoincasa.eu.org/oauth/authorize",
+      // 修改授权端点
+      authorization: {
+        url: "https://tuttofattoincasa.eu.org/oauth/authorize",
+        params: {
+          // 这里可以指定您希望发送的参数
+          response_type: "code",
+          scope: "user.read", // 根据您的需求修改 scope
+          // 如果您的授权服务器需要 state，您可以在这里手动添加一个
+          // state: "your_custom_state_value", // 注意：NextAuth.js 也会自动处理 state，所以这里可能不需要
+          // 移除 NextAuth.js 默认添加的 OIDC 范围和 PKCE 相关参数（如果有冲突的话）
+          // 但是请注意：移除 PKCE 会降低安全性！
+          // 例如，如果您想禁用 PKCE，可以尝试设置 disablePKCE: true (如果 Provider 支持)
+          // 但 GitHub Provider 默认是支持 PKCE 的，不建议关闭
+          // 如果您发现某些参数是 NextAuth.js 额外添加的且您的服务器不接受，
+          // 这里是覆盖它们的地方。
+        }
+      },
       token: "https://tuttofattoincasa.eu.org/oauth/token",
       userinfo: {
         url: "https://tuttofattoincasa.eu.org/api/user",
-        // ✨ 正确地解构 tokens 和 client
         async request({ tokens, client }: { tokens: Account; client: any }) {
-          // 这里是获取用户信息的请求
           const profile = await client.userinfo(tokens.access_token);
-          // ✨ 转换用户信息的格式以匹配 NextAuth.js 的 User 接口
           return {
-            id: profile.id.toString(), // id 必须是字符串
-            name: profile.nickname || profile.username, // 使用 nickname 或 username 作为 name
+            id: profile.id.toString(),
+            name: profile.nickname || profile.username,
             email: profile.email,
             image: profile.avatar_url,
-            username: profile.username, // 将 username 也加入到返回中
+            username: profile.username,
           };
         },
       },
