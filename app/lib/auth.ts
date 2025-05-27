@@ -1,12 +1,15 @@
 import NextAuth from "next-auth"
-import GitHub from "next-auth/providers/github"
+// 引入 CredentialsProvider 是正确的，因为您还有其他认证方式
+import CredentialsProvider from "next-auth/providers/credentials"
+// 导入 OAuthProvider 模块
+import type { OAuthConfig } from "next-auth/providers"
+
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
 import { accounts, users, roles, userRoles } from "./schema"
 import { eq } from "drizzle-orm"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { Permission, hasPermission, ROLES, Role } from "./permissions"
-import CredentialsProvider from "next-auth/providers/credentials"
 import { hashPassword, comparePassword } from "@/lib/utils"
 import { authSchema } from "@/lib/validation"
 import { generateAvatarUrl } from "./avatar"
@@ -18,6 +21,48 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.KNIGHT]: "骑士（高级用户）",
   [ROLES.CIVILIAN]: "平民（普通用户）",
 }
+
+// 定义您的自定义 GitHub OAuth 提供者返回的用户资料类型
+// 确保这个类型与您的 'https://tuttofattoincasa.eu.org/api/user' 端点返回的 JSON 结构匹配
+interface CustomGitHubProfile {
+  id: string; // 必须是唯一标识符
+  name?: string | null; // 用户名或显示名称
+  email?: string | null; // 邮箱地址
+  avatar_url?: string | null; // 头像 URL
+  username?: string | null; // 如果您的系统中使用 username 字段
+  // 根据您的自定义 API 返回的其他字段可以添加到这里
+  // 例如：github_id: number;
+}
+
+// 定义您的自定义 OAuth 提供者
+const CustomGitHubProvider: OAuthConfig<CustomGitHubProfile> = {
+  id: "custom-github", // 这是此提供者的唯一 ID。例如，登录按钮上会显示 "Sign in with GitHub (Custom)"
+  name: "GitHub (Custom)", // 显示在登录界面上的名称
+  type: "oauth", // 指定这是一个 OAuth 提供者
+  clientId: process.env.AUTH_GITHUB_ID, // 您的 GitHub OAuth 应用的 Client ID
+  clientSecret: process.env.AUTH_GITHUB_SECRET, // 您的 GitHub OAuth 应用的 Client Secret
+
+  // 指定自定义的授权、令牌和用户信息端点
+  authorization: "https://tuttofattoincasa.eu.org/oauth/authorize",
+  token: "https://tuttofattoincasa.eu.org/oauth/token",
+  userinfo: "https://tuttofattoincasa.eu.org/api/user", // 从此端点获取用户资料
+
+  // profile 回调函数用于将从 userinfo 端点获取到的数据映射到 NextAuth.js 的标准用户对象
+  profile(profile) {
+    // 确保这里的映射逻辑与您的 'https://tuttofattoincasa.eu.org/api/user' 返回的数据结构一致
+    return {
+      id: profile.id, // 必须是唯一标识符
+      name: profile.name || profile.username, // 优先使用 name，如果没有则使用 username
+      email: profile.email,
+      image: profile.avatar_url, // 如果您的自定义 API 返回 avatar_url
+      username: profile.username, // 如果您的用户模式中也有 username 字段
+    };
+  },
+
+  // 如果您的自定义 OAuth 服务器需要特定的 Scope，您也可以在这里定义
+  // 例如：
+  // scope: "user:email read:user",
+};
 
 const getDefaultRole = async (): Promise<Role> => {
   const defaultRole = await getRequestContext().env.SITE_CONFIG.get("DEFAULT_ROLE")
@@ -89,38 +134,7 @@ export const {
     accountsTable: accounts,
   }),
   providers: [
-    GitHub({
-      clientId: process.env.AUTH_GITHUB_ID,
-      clientSecret: process.env.AUTH_GITHUB_SECRET,
-      authorizationUrl: 'https://tuttofattoincasa.eu.org/oauth/authorize',
-      tokenUrl: 'https://tuttofattoincasa.eu.org/oauth/token',
-      // 添加 profile 回调来处理自定义的用户资料获取
-      profile: async (profile, tokens) => {
-        // 注意：这里的 'profile' 参数通常是 GitHub 原始返回的用户资料
-        // 如果您需要从 https://tuttofattoincasa.eu.org/api/user 获取，您可能需要这样做：
-        try {
-          const response = await fetch('https://tuttofattoincasa.eu.org/api/user', {
-            headers: {
-              Authorization: `Bearer ${tokens.access_token}`, // 使用从 tokenUrl 获取到的 token
-            },
-          });
-          const customUserProfile = await response.json();
-
-          // 返回 NextAuth.js 期望的用户结构
-          return {
-            id: customUserProfile.id, // 或者其他唯一标识符
-            name: customUserProfile.name || customUserProfile.username,
-            email: customUserProfile.email,
-            image: customUserProfile.avatar_url || customUserProfile.image,
-            // 您也可以添加其他自定义字段
-            // username: customUserProfile.username, // 确保您的 user schema 中有 username 字段
-          };
-        } catch (error) {
-          console.error("Error fetching custom user profile:", error);
-          throw new Error("Failed to fetch user profile from custom API");
-        }
-      },
-    }),
+    CustomGitHubProvider, // <-- 这里使用了您自定义的提供者
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -136,7 +150,7 @@ export const {
 
         try {
           authSchema.parse({ username, password })
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
           throw new Error("输入格式不正确")
         }
@@ -205,7 +219,7 @@ export const {
           where: eq(userRoles.userId, session.user.id),
           with: { role: true },
         })
-  
+
         if (!userRoleRecords.length) {
           const defaultRole = await getDefaultRole()
           const role = await findOrCreateRole(db, defaultRole)
@@ -217,7 +231,7 @@ export const {
             role: role
           }]
         }
-  
+
         session.user.roles = userRoleRecords.map(ur => ({
           name: ur.role.name,
         }))
@@ -233,7 +247,7 @@ export const {
 
 export async function register(username: string, password: string) {
   const db = createDb()
-  
+
   const existing = await db.query.users.findFirst({
     where: eq(users.username, username)
   })
@@ -243,7 +257,7 @@ export async function register(username: string, password: string) {
   }
 
   const hashedPassword = await hashPassword(password)
-  
+
   const [user] = await db.insert(users)
     .values({
       username,
