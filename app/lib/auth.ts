@@ -2,7 +2,7 @@ import NextAuth from "next-auth"
 // 引入内置的 GitHub Provider
 import GitHub from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
-// 不需要 OAuthConfig 类型了，因为我们用的是内置的 GitHub 提供者
+// 不再需要 OAuthConfig 类型，因为我们使用内置的 GitHub 提供者并利用其特定配置
 
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
@@ -95,13 +95,14 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
-      // 使用 `custom` 选项来指定您的自定义端点
+      // 使用 `authorization`, `token`, `userinfo` 对象来指定您的自定义端点
+      // 这允许您使用 GitHub Provider 的 ID (`github`) 并指向自定义 OAuth 服务器
       authorization: { url: 'https://tuttofattoincasa.eu.org/oauth/authorize' },
       token: { url: 'https://tuttofattoincasa.eu.org/oauth/token' },
       userinfo: { url: 'https://tuttofattoincasa.eu.org/api/user' },
-      // 如果您的自定义 OAuth 服务器需要特定的 Scope，您也可以在这里定义
-      // 默认为 'read:user' 和 'user:email'
-      // scope: "openid profile email", // 如果您想显式设置
+      // 如果您的自定义 OAuth 服务器需要 'openid profile email' 这些特定的 Scope，
+      // 可以在此添加。NextAuth.js 的 GitHub Provider 默认 Scope 为 'read:user' 和 'user:email'。
+      // scope: "openid profile email",
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -210,6 +211,16 @@ export const {
   session: {
     strategy: "jwt",
   },
+  // --- 关键改动：指定自定义登录页面路径 ---
+  pages: {
+    signIn: "/login", // NextAuth.js 将重定向到您的 app/login/page.tsx
+    // 您可以根据需要添加其他自定义页面
+    // signOut: '/auth/signout',
+    // error: '/auth/error',
+    // verifyRequest: '/auth/verify-request',
+    // newUser: '/auth/new-user'
+  },
+  // --- 结束关键改动 ---
 }))
 
 export async function register(username: string, password: string) {
