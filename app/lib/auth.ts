@@ -1,8 +1,8 @@
 import NextAuth from "next-auth"
-// 引入 CredentialsProvider 是正确的，因为您还有其他认证方式
+// 引入内置的 GitHub Provider
+import GitHub from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
-// 导入 OAuthProvider 模块
-import type { OAuthConfig } from "next-auth/providers"
+// 不需要 OAuthConfig 类型了，因为我们用的是内置的 GitHub 提供者
 
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
@@ -21,48 +21,6 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.KNIGHT]: "骑士（高级用户）",
   [ROLES.CIVILIAN]: "平民（普通用户）",
 }
-
-// 定义您的自定义 GitHub OAuth 提供者返回的用户资料类型
-// 确保这个类型与您的 'https://tuttofattoincasa.eu.org/api/user' 端点返回的 JSON 结构匹配
-interface CustomGitHubProfile {
-  id: string; // 必须是唯一标识符
-  name?: string | null; // 用户名或显示名称
-  email?: string | null; // 邮箱地址
-  avatar_url?: string | null; // 头像 URL
-  username?: string | null; // 如果您的系统中使用 username 字段
-  // 根据您的自定义 API 返回的其他字段可以添加到这里
-  // 例如：github_id: number;
-}
-
-// 定义您的自定义 OAuth 提供者
-const CustomGitHubProvider: OAuthConfig<CustomGitHubProfile> = {
-  id: "custom-github", // 这是此提供者的唯一 ID。例如，登录按钮上会显示 "Sign in with GitHub (Custom)"
-  name: "GitHub (Custom)", // 显示在登录界面上的名称
-  type: "oauth", // 指定这是一个 OAuth 提供者
-  clientId: process.env.AUTH_GITHUB_ID, // 您的 GitHub OAuth 应用的 Client ID
-  clientSecret: process.env.AUTH_GITHUB_SECRET, // 您的 GitHub OAuth 应用的 Client Secret
-
-  // 指定自定义的授权、令牌和用户信息端点
-  authorization: "https://tuttofattoincasa.eu.org/oauth/authorize",
-  token: "https://tuttofattoincasa.eu.org/oauth/token",
-  userinfo: "https://tuttofattoincasa.eu.org/api/user", // 从此端点获取用户资料
-
-  // profile 回调函数用于将从 userinfo 端点获取到的数据映射到 NextAuth.js 的标准用户对象
-  profile(profile) {
-    // 确保这里的映射逻辑与您的 'https://tuttofattoincasa.eu.org/api/user' 返回的数据结构一致
-    return {
-      id: profile.id, // 必须是唯一标识符
-      name: profile.name || profile.username, // 优先使用 name，如果没有则使用 username
-      email: profile.email,
-      image: profile.avatar_url, // 如果您的自定义 API 返回 avatar_url
-      username: profile.username, // 如果您的用户模式中也有 username 字段
-    };
-  },
-
-  // 如果您的自定义 OAuth 服务器需要特定的 Scope，您也可以在这里定义
-  // 例如：
-  // scope: "user:email read:user",
-};
 
 const getDefaultRole = async (): Promise<Role> => {
   const defaultRole = await getRequestContext().env.SITE_CONFIG.get("DEFAULT_ROLE")
@@ -134,7 +92,17 @@ export const {
     accountsTable: accounts,
   }),
   providers: [
-    CustomGitHubProvider, // <-- 这里使用了您自定义的提供者
+    GitHub({
+      clientId: process.env.AUTH_GITHUB_ID,
+      clientSecret: process.env.AUTH_GITHUB_SECRET,
+      // 使用 `custom` 选项来指定您的自定义端点
+      authorization: { url: 'https://tuttofattoincasa.eu.org/oauth/authorize' },
+      token: { url: 'https://tuttofattoincasa.eu.org/oauth/token' },
+      userinfo: { url: 'https://tuttofattoincasa.eu.org/api/user' },
+      // 如果您的自定义 OAuth 服务器需要特定的 Scope，您也可以在这里定义
+      // 默认为 'read:user' 和 'user:email'
+      // scope: "openid profile email", // 如果您想显式设置
+    }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -150,7 +118,6 @@ export const {
 
         try {
           authSchema.parse({ username, password })
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
           throw new Error("输入格式不正确")
         }
