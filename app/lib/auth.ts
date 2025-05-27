@@ -1,18 +1,15 @@
 import NextAuth from "next-auth"
-// 引入内置的 GitHub Provider
 import GitHub from "next-auth/providers/github"
-import CredentialsProvider from "next-auth/providers/credentials"
-
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
 import { accounts, users, roles, userRoles } from "./schema"
 import { eq } from "drizzle-orm"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { Permission, hasPermission, ROLES, Role } from "./permissions"
+import CredentialsProvider from "next-auth/providers/credentials"
 import { hashPassword, comparePassword } from "@/lib/utils"
 import { authSchema } from "@/lib/validation"
 import { generateAvatarUrl } from "./avatar"
-import { getUserId } from "./apiKey"
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [ROLES.EMPEROR]: "皇帝（网站所有者）",
@@ -65,13 +62,12 @@ export async function getUserRole(userId: string) {
 }
 
 export async function checkPermission(permission: Permission) {
-  const userId = await getUserId()
-
-  if (!userId) return false
+  const session = await auth()
+  if (!session?.user?.id) return false
 
   const db = createDb()
   const userRoleRecords = await db.query.userRoles.findMany({
-    where: eq(userRoles.userId, userId),
+    where: eq(userRoles.userId, session.user.id),
     with: { role: true },
   })
 
@@ -94,9 +90,24 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
-      authorization: { url: 'https://tuttofattoincasa.eu.org/oauth/authorize' },
-      token: { url: 'https://tuttofattoincasa.eu.org/oauth/token' },
-      userinfo: { url: 'https://tuttofattoincasa.eu.org/api/user' },
+      // ✨ 修改 GitHub 授权登录地址
+      authorization: "https://tuttofattoincasa.eu.org/oauth/authorize",
+      token: "https://tuttofattoincasa.eu.org/oauth/token",
+      userinfo: {
+        url: "https://tuttofattoincasa.eu.org/api/user",
+        async request({ tokens, client }) {
+          // 这里是获取用户信息的请求
+          const profile = await client.userinfo(tokens.access_token);
+          // ✨ 转换用户信息的格式以匹配 NextAuth.js 的 User 接口
+          return {
+            id: profile.id.toString(), // id 必须是字符串
+            name: profile.nickname || profile.username, // 使用 nickname 或 username 作为 name
+            email: profile.email,
+            image: profile.avatar_url,
+            username: profile.username, // 将 username 也加入到返回中
+          };
+        },
+      },
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -113,9 +124,8 @@ export const {
 
         try {
           authSchema.parse({ username, password })
-        // --- 关键改动：将 eslint-disable-next-line 放在 catch 语句前 ---
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (_error) { // 确保这里是 _error
+        } catch (error) {
           throw new Error("输入格式不正确")
         }
 
@@ -206,9 +216,6 @@ export const {
   },
   session: {
     strategy: "jwt",
-  },
-  pages: {
-    signIn: "/login",
   },
 }))
 
