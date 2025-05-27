@@ -95,8 +95,8 @@ export const {
       token: "https://tuttofattoincasa.eu.org/oauth/token",
       userinfo: {
         url: "https://tuttofattoincasa.eu.org/api/user",
-        // ✨ 为 tokens 参数明确指定类型为 Account
-        async request({ tokens }: { tokens: Account; client: any }) { // client 也可能需要更具体的类型，这里暂时用 any
+        // ✨ 正确地解构 tokens 和 client
+        async request({ tokens, client }: { tokens: Account; client: any }) {
           // 这里是获取用户信息的请求
           const profile = await client.userinfo(tokens.access_token);
           // ✨ 转换用户信息的格式以匹配 NextAuth.js 的 User 接口
