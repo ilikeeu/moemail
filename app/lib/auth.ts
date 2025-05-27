@@ -96,7 +96,6 @@ export const {
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
       // 使用 `authorization`, `token`, `userinfo` 对象来指定您的自定义端点
-      // 这允许您使用 GitHub Provider 的 ID (`github`) 并指向自定义 OAuth 服务器
       authorization: { url: 'https://tuttofattoincasa.eu.org/oauth/authorize' },
       token: { url: 'https://tuttofattoincasa.eu.org/oauth/token' },
       userinfo: { url: 'https://tuttofattoincasa.eu.org/api/user' },
@@ -119,7 +118,8 @@ export const {
 
         try {
           authSchema.parse({ username, password })
-        } catch (error) {
+        // --- 关键改动：将 'error' 改为 '_error' ---
+        } catch (_error) {
           throw new Error("输入格式不正确")
         }
 
@@ -211,16 +211,10 @@ export const {
   session: {
     strategy: "jwt",
   },
-  // --- 关键改动：指定自定义登录页面路径 ---
+  // 指定自定义登录页面路径
   pages: {
     signIn: "/login", // NextAuth.js 将重定向到您的 app/login/page.tsx
-    // 您可以根据需要添加其他自定义页面
-    // signOut: '/auth/signout',
-    // error: '/auth/error',
-    // verifyRequest: '/auth/verify-request',
-    // newUser: '/auth/new-user'
   },
-  // --- 结束关键改动 ---
 }))
 
 export async function register(username: string, password: string) {
