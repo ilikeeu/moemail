@@ -94,6 +94,32 @@ export const {
       clientSecret: process.env.AUTH_GITHUB_SECRET,
       authorizationUrl: 'https://tuttofattoincasa.eu.org/oauth/authorize',
       tokenUrl: 'https://tuttofattoincasa.eu.org/oauth/token',
+      // 添加 profile 回调来处理自定义的用户资料获取
+      profile: async (profile, tokens) => {
+        // 注意：这里的 'profile' 参数通常是 GitHub 原始返回的用户资料
+        // 如果您需要从 https://tuttofattoincasa.eu.org/api/user 获取，您可能需要这样做：
+        try {
+          const response = await fetch('https://tuttofattoincasa.eu.org/api/user', {
+            headers: {
+              Authorization: `Bearer ${tokens.access_token}`, // 使用从 tokenUrl 获取到的 token
+            },
+          });
+          const customUserProfile = await response.json();
+
+          // 返回 NextAuth.js 期望的用户结构
+          return {
+            id: customUserProfile.id, // 或者其他唯一标识符
+            name: customUserProfile.name || customUserProfile.username,
+            email: customUserProfile.email,
+            image: customUserProfile.avatar_url || customUserProfile.image,
+            // 您也可以添加其他自定义字段
+            // username: customUserProfile.username, // 确保您的 user schema 中有 username 字段
+          };
+        } catch (error) {
+          console.error("Error fetching custom user profile:", error);
+          throw new Error("Failed to fetch user profile from custom API");
+        }
+      },
     }),
     CredentialsProvider({
       name: "Credentials",
