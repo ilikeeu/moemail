@@ -92,6 +92,8 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
+      authorizationUrl: 'https://tuttofattoincasa.eu.org/oauth/authorize',
+      tokenUrl: 'https://tuttofattoincasa.eu.org/oauth/token',
     }),
     CredentialsProvider({
       name: "Credentials",
