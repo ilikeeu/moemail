@@ -2,7 +2,6 @@ import NextAuth from "next-auth"
 // 引入内置的 GitHub Provider
 import GitHub from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
-// 不再需要 OAuthConfig 类型，因为我们使用内置的 GitHub 提供者并利用其特定配置
 
 import { DrizzleAdapter } from "@auth/drizzle-adapter"
 import { createDb, Db } from "./db"
@@ -95,13 +94,9 @@ export const {
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
-      // 使用 `authorization`, `token`, `userinfo` 对象来指定您的自定义端点
       authorization: { url: 'https://tuttofattoincasa.eu.org/oauth/authorize' },
       token: { url: 'https://tuttofattoincasa.eu.org/oauth/token' },
       userinfo: { url: 'https://tuttofattoincasa.eu.org/api/user' },
-      // 如果您的自定义 OAuth 服务器需要 'openid profile email' 这些特定的 Scope，
-      // 可以在此添加。NextAuth.js 的 GitHub Provider 默认 Scope 为 'read:user' 和 'user:email'。
-      // scope: "openid profile email",
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -118,8 +113,9 @@ export const {
 
         try {
           authSchema.parse({ username, password })
-        // --- 关键改动：将 'error' 改为 '_error' ---
-        } catch (_error) {
+        // --- 关键改动：将 eslint-disable-next-line 放在 catch 语句前 ---
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (_error) { // 确保这里是 _error
           throw new Error("输入格式不正确")
         }
 
@@ -211,9 +207,8 @@ export const {
   session: {
     strategy: "jwt",
   },
-  // 指定自定义登录页面路径
   pages: {
-    signIn: "/login", // NextAuth.js 将重定向到您的 app/login/page.tsx
+    signIn: "/login",
   },
 }))
 
